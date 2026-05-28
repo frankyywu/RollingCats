@@ -3,28 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>喵机妙算 · Meowracle Machine</title>
+  <title>喵言机 · Meowracle Machine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="wrap">
     <header>
-      <div class="logo">🐾</div>
-      <h1>喵机妙算</h1>
+      <div class="logo" id="logo"></div>
+      <h1>喵言机</h1>
       <div class="en">Meowracle Machine</div>
       <div class="sub">让猫在键盘上滚一圈,把乱码破译成你的下一个产品创意。</div>
     </header>
 
     <section class="panel">
-      <label class="field">选择今日产品军师猫(决定创意风格)</label>
-      <select id="persona">
-        <option value="ragdoll">性冷淡极简派 · 冷淡布偶</option>
-        <option value="orange">激进颠覆派 · 暴躁橘猫</option>
-        <option value="black">暗黑增长派 · 阴湿黑猫</option>
-        <option value="calico">AI 原生派 · 赛博三花</option>
-        <option value="siamese">商业变现派 · 油腻暹罗</option>
-        <option value="tabby">打工人体恤派 · 加班狸花</option>
-      </select>
+      <label class="field">点一只猫 · 它决定创意风格,也决定界面主题</label>
+      <div id="catPicker" class="cat-picker"></div>
+      <input type="hidden" id="persona" value="ragdoll" />
+      <div id="apiStatus" class="api-status checking">正在检测 AI 破译服务…</div>
 
       <!-- 降临台:实时捕捉猫滚动时按出的按键流 -->
       <div id="stage" class="stage idle">
@@ -46,7 +44,7 @@
           <button class="primary big" id="stopBtn">✨ 猫滚完了,破译创意</button>
         </div>
       </div>
-      <div class="disclaimer">本产品由「猫的随机性 + 维基随机词条 + AI 硬凑」驱动,创意仅供 vibe,不构成商业建议。猫不为融资失败负责。</div>
+      <div class="disclaimer">本产品由「猫的随机性 + AI黑话 × 社会情绪词 × 资本叙事黑话 + AI 硬凑」驱动,创意仅供 vibe,不构成商业建议。猫不为融资失败负责。</div>
     </section>
 
     <section id="cardWrap" class="hidden"></section>
@@ -63,8 +61,129 @@
   <script src="oracle.js"></script>
   <script>
     const $ = (s) => document.querySelector(s);
+
+    /* ---------- 像素猫精灵 + 主题 ---------- */
+    // 左半边轮廓(8 列),镜像成 16 列。o=描边 f=毛 r=耳内
+    const CAT_HALF = [
+      "...oo...",
+      "..ofro..",
+      "..offo..",
+      "..offo.o",
+      ".offffff",
+      "offfffff",
+      "offfffff",
+      "offfffff",
+      "offfffff",
+      "offfffff",
+      ".offffff",
+      "..offfff",
+      "...oooff",
+    ];
+    const EYES = [[4,6],[5,6],[4,7],[5,7],[10,6],[11,6],[10,7],[11,7]];
+    const NOSE = [[7,9],[8,9]];
+
+    // 主题:每只猫一种配色 + 一套界面强调色(其余界面保持中性)
+    const THEMES = {
+      ragdoll:{ key:"ragdoll", name:"性冷淡极简派", accent:"#9aa0c4", accent2:"#6f76a0", ink:"#15151b",
+        pal:{o:"#b3aac0", f:"#efece6", r:"#d8cfe0", e:"#8a83c9", n:"#b58fa0"} },
+      orange:{ key:"orange", name:"激进颠覆派", accent:"#f2843a", accent2:"#b85e1c", ink:"#1b1208",
+        pal:{o:"#9c4f17", f:"#f0903e", r:"#ffcaa0", e:"#39633a", n:"#7a3b2a"} },
+      calico:{ key:"calico", name:"AI 原生派", accent:"#46cabc", accent2:"#2f9d92", ink:"#08201d",
+        pal:{o:"#2e2a33", f:"#f0ece3", r:"#e7a98a", e:"#caa24a", n:"#9a5a4a"},
+        patches:[{x:2,y:4,c:"#e8913f"},{x:3,y:4,c:"#e8913f"},{x:2,y:5,c:"#e8913f"},{x:3,y:5,c:"#e8913f"},
+                 {x:12,y:9,c:"#2e2a33"},{x:13,y:9,c:"#2e2a33"},{x:12,y:10,c:"#2e2a33"},{x:13,y:10,c:"#2e2a33"}] },
+      siamese:{ key:"siamese", name:"商业变现派", accent:"#4aa3d1", accent2:"#2d7aa6", ink:"#07171f",
+        pal:{o:"#4b3326", f:"#e9dcc2", r:"#6e4a34", e:"#4aa3d1", n:"#5a3a2a"},
+        patches:[{x:2,y:1,c:"#4b3326"},{x:13,y:1,c:"#4b3326"},{x:7,y:11,c:"#7a5a44"},{x:8,y:11,c:"#7a5a44"}] },
+      tabby:{ key:"tabby", name:"打工人体恤派", accent:"#7faa6b", accent2:"#5a824a", ink:"#0c1708",
+        pal:{o:"#4f4d43", f:"#9a988a", r:"#c2b39c", e:"#c7a83f", n:"#5a564a"},
+        patches:[{x:7,y:4,c:"#4f4d43"},{x:8,y:4,c:"#4f4d43"},{x:6,y:5,c:"#4f4d43"},{x:9,y:5,c:"#4f4d43"},{x:7,y:6,c:"#4f4d43"},{x:8,y:6,c:"#4f4d43"}] },
+      black:{ key:"black", name:"暗黑增长派", accent:"#8fcf4f", accent2:"#5f9433", ink:"#0c1505",
+        pal:{o:"#16161c", f:"#33333c", r:"#4a3f47", e:"#9bd34a", n:"#1c1c22"} },
+    };
+    const CAT_ORDER = ["ragdoll","orange","calico","siamese","tabby","black"];
+
+    function catSVG(theme, cell) {
+      cell = cell || 4;
+      const rows = CAT_HALF.map((h) => h + [...h].reverse().join(""));
+      const W = 16 * cell, H = rows.length * cell;
+      let r = "";
+      const put = (x, y, c) => { r += `<rect x="${x*cell}" y="${y*cell}" width="${cell}" height="${cell}" fill="${c}"/>`; };
+      rows.forEach((row, y) => [...row].forEach((ch, x) => { const c = { o: theme.pal.o, f: theme.pal.f, r: theme.pal.r }[ch]; if (c) put(x, y, c); }));
+      (theme.patches || []).forEach((p) => put(p.x, p.y, p.c));
+      EYES.forEach(([x, y]) => put(x, y, theme.pal.e));
+      NOSE.forEach(([x, y]) => put(x, y, theme.pal.n));
+      return `<svg class="pixel-cat" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">${r}</svg>`;
+    }
+
+    function applyTheme(key) {
+      const t = THEMES[key] || THEMES.ragdoll;
+      const root = document.documentElement.style;
+      root.setProperty("--accent", t.accent);
+      root.setProperty("--accent-2", t.accent2);
+      root.setProperty("--accent-ink", t.ink);
+      $("#persona").value = key;
+      const logo = $("#logo"); if (logo) logo.innerHTML = catSVG(t, 6);
+      document.querySelectorAll(".cat-btn").forEach((b) => b.classList.toggle("selected", b.dataset.key === key));
+    }
+
+    function buildCatPicker() {
+      const wrap = $("#catPicker");
+      wrap.innerHTML = CAT_ORDER.map((k) => {
+        const t = THEMES[k];
+        return `<button type="button" class="cat-btn" data-key="${k}" title="${t.name}">${catSVG(t, 4)}<span class="cat-name">${t.name}</span></button>`;
+      }).join("");
+      wrap.querySelectorAll(".cat-btn").forEach((b) => b.addEventListener("click", () => applyTheme(b.dataset.key)));
+      applyTheme($("#persona").value || "ragdoll");
+    }
+    buildCatPicker();
     let capturing = false, startTs = 0, lastChar = "", buffer = "";
     const cap = $("#capture");
+    const oracleStatus = {
+      checked: false,
+      serverReachable: false,
+      hasApiKey: false,
+      model: "",
+      reason: "尚未完成 AI 服务检测",
+    };
+
+    function renderApiStatus(state, text) {
+      const el = $("#apiStatus");
+      el.className = "api-status " + state;
+      el.textContent = text;
+    }
+
+    async function checkOracleStatus() {
+      if (location.protocol === "file:") {
+        oracleStatus.checked = true;
+        oracleStatus.reason = "当前是直接打开 index.html，浏览器无法读取 NVIDIA_API_KEY；请运行 python3 server.py 后访问 http://localhost:8000/";
+        renderApiStatus("offline", oracleStatus.reason);
+        return;
+      }
+      try {
+        const r = await fetch("/api/status", { cache: "no-store" });
+        const data = await r.json();
+        oracleStatus.checked = true;
+        oracleStatus.serverReachable = !!(r.ok && data && data.ok);
+        oracleStatus.hasApiKey = !!(oracleStatus.serverReachable && data.hasApiKey);
+        oracleStatus.model = data && data.model ? data.model : "";
+        if (oracleStatus.hasApiKey) {
+          oracleStatus.reason = `AI 破译已启用 · ${oracleStatus.model}`;
+          renderApiStatus("ready", oracleStatus.reason);
+        } else if (oracleStatus.serverReachable) {
+          oracleStatus.reason = "已连接本地服务器，但没有检测到 NVIDIA_API_KEY，会使用本地兜底结果";
+          renderApiStatus("offline", oracleStatus.reason);
+        } else {
+          oracleStatus.reason = "AI 服务状态异常，会使用本地兜底结果";
+          renderApiStatus("offline", oracleStatus.reason);
+        }
+      } catch (e) {
+        oracleStatus.checked = true;
+        oracleStatus.reason = "没有连上本地服务器，会使用本地兜底结果；请运行 python3 server.py 后打开 http://localhost:8000/";
+        renderApiStatus("offline", oracleStatus.reason);
+      }
+    }
+    checkOracleStatus();
 
     function setStage(state) {
       $("#stage").className = "stage " + state;
@@ -132,32 +251,37 @@
       runOracle(finalText, $("#persona").value);
     }
 
-    // 流程：先用本地引擎兜底出完整结构，再请服务端（维基随机词条 + AI 破译）覆盖。
+    // 流程：先用本地引擎兜底出完整结构，再请服务端（三池词库 + AI 破译）覆盖。
     // 服务不可用时静默回退到本地破译。
     async function runOracle(finalText, persona) {
       let res = window.MeowOracle.localIdea(finalText, persona);
       res.raw = finalText;
       res.aiPowered = false;
+      res.offlineReason = oracleStatus.reason;
       showLoading();
-      try {
-        const r = await fetch("/api/oracle", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ raw: finalText, persona }),
-        });
-        const data = await r.json();
-        if (data && data.ok && data.idea) {
-          res = {
-            raw: finalText,
-            entries: Array.isArray(data.entries) && data.entries.length ? data.entries : res.entries,
-            personaName: data.personaName || res.personaName,
-            idea: data.idea,
-            meters: data.meters || res.meters,
-            aiPowered: true,
-          };
+      if (location.protocol !== "file:" && (!oracleStatus.checked || oracleStatus.hasApiKey)) {
+        try {
+          const r = await fetch("/api/oracle", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ raw: finalText, persona }),
+          });
+          const data = await r.json();
+          if (data && data.ok && data.idea) {
+            res = {
+              raw: finalText,
+              entries: Array.isArray(data.entries) && data.entries.length ? data.entries : res.entries,
+              personaName: data.personaName || res.personaName,
+              idea: data.idea,
+              meters: data.meters || res.meters,
+              aiPowered: true,
+            };
+          } else {
+            res.offlineReason = data && data.error ? data.error : "AI 破译接口没有返回有效结果，已使用本地兜底";
+          }
+        } catch (e) {
+          res.offlineReason = "AI 破译接口请求失败，已使用本地兜底";
         }
-      } catch (e) {
-        // 网络/服务异常：保留本地破译
       }
       render(res);
     }
@@ -165,9 +289,9 @@
     function showLoading() {
       $("#cardWrap").innerHTML = `
         <div class="card loading-card">
-          <div class="loading-cat">🐈‍⬛✨</div>
+          <div class="loading-cat">${catSVG(THEMES[$("#persona").value] || THEMES.ragdoll, 5)}</div>
           <div class="loading-text">猫军师正在破译这串乱码…</div>
-          <div class="loading-sub">（正在从维基百科召唤随机概念，再让 AI 硬凑成产品创意）</div>
+          <div class="loading-sub">（正在从 AI黑话 × 社会情绪词 × 资本叙事黑话 三库混合召唤概念，再让 AI 硬凑成产品创意）</div>
         </div>`;
       $("#cardWrap").classList.remove("hidden");
       $("#cardWrap").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -210,6 +334,7 @@
             <span class="persona">军师:${escapeHtml(res.personaName || "")}${res.aiPowered ? ' · <em class="ai-badge">AI 破译</em>' : ' · <em class="ai-badge offline">本地破译</em>'}</span>
           </div>
           <div class="body">
+            ${res.aiPowered || !res.offlineReason ? "" : `<div class="offline-note">${escapeHtml(res.offlineReason)}</div>`}
             <div class="oracle-raw">${escapeHtml(res.raw) || "（猫只是路过,什么都没踩——那就随机召唤几个概念吧）"}</div>
 
             ${entriesBox}
@@ -219,6 +344,7 @@
 
             <div class="section-title">核心创意</div>
             <div class="reading">${escapeHtml(idea.concept || "")}</div>
+            ${idea.coreUsage ? `<div class="section-title">核心用法</div><div class="reading">${escapeHtml(idea.coreUsage)}</div>` : ""}
 
             <div class="section-title">关键功能</div>
             <ul class="features">${feats.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}</ul>
@@ -262,12 +388,13 @@
 
 【定位】${idea.tagline || ""}
 【核心创意】${idea.concept || ""}
+【核心用法】${idea.coreUsage || ""}
 【关键功能】${feats.join(" / ")}
 【目标用户】${idea.targetUser || ""}
 【技术栈氛围】${idea.techVibe || ""}
 【猫军师点评】${idea.catWisdom || ""}
 落地可行性 ${meters.feasibility ?? 0}% · vibe 浓度 ${meters.vibe ?? 0}% · 投资人困惑度 ${meters.investorConfusion ?? 0}%
-—— 喵机妙算 Meowracle Machine`;
+—— 喵言机 Meowracle Machine`;
       navigator.clipboard?.writeText(t).then(
         () => { const b = $("#copyBtn"); b.textContent = "✅ 已复制,去立项"; setTimeout(() => (b.textContent = "📋 复制创意去立项"), 1800); },
         () => alert(t)

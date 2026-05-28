@@ -1,6 +1,6 @@
-/* 喵机妙算 Meowracle Machine — 本地兜底引擎(离线 / 服务不可用时)
- * 正常情况下产品创意由服务端「维基随机词条 + AI 破译」生成。
- * 这里只是一个零依赖的本地替身:把乱码当种子,从内置词库取概念,
+/* 喵言机 Meowracle Machine — 本地兜底引擎(离线 / 服务不可用时)
+ * 正常情况下产品创意由服务端「三池词库 + AI 破译」生成。
+ * 这里只是一个零依赖的本地替身:把乱码当种子,从内置三池词库取概念,
  * 拼出一个粗糙但能用的产品创意,保证 Demo 永不空场。
  */
 
@@ -24,13 +24,27 @@ function mulberry32(seed) {
 function pick(rng, arr) { return arr[Math.floor(rng() * arr.length)]; }
 function rangePick(rng, lo, hi) { return Math.round(lo + rng() * (hi - lo)); }
 
-/* 内置词库:维基拿不到时的概念来源 */
-const LOCAL_POOL = [
-  "潮汐发电", "巴洛克音乐", "蚂蚁信息素", "黑胶唱片", "二十四节气", "活字印刷",
-  "深海热泉", "莫比乌斯环", "多巴胺", "瑞士军刀", "信天翁", "拜占庭马赛克",
-  "光合作用", "关东煮", "摩斯密码", "陨石坑", "盲文", "发酵食品",
-  "候鸟迁徙", "齿轮", "极光", "失物招领处", "潜水钟", "竹简",
+/* 内置三池词库:AI 技术锚点 + 社会情绪痛点 + 资本叙事抓手 */
+const AI_TECH_POOL = [
+  "RAG检索增强", "AI Agent自主体", "MCP协议", "vibe coding", "提示词工程",
+  "上下文窗口", "向量数据库", "模型幻觉", "fine-tune微调", "多模态理解",
+  "模型蒸馏", "强化学习", "知识图谱", "情感计算", "联邦学习",
+  "零样本学习", "涌现能力", "具身智能", "数字孪生", "边缘计算",
 ];
+const SOCIAL_POOL = [
+  "班味", "情绪价值", "搭子文化", "精神内耗", "松弛感",
+  "淡人哲学", "电子榨菜", "反向旅游", "发疯文学", "特种兵旅游",
+  "多巴胺穿搭", "寺庙经济", "微短剧", "打工人日记", "躺平哲学",
+  "脆皮年轻人", "全职儿女", "互联网嘴替", "情绪垃圾桶", "显眼包",
+];
+const VC_NARRATIVE_POOL = [
+  "层级与智能", "决策中枢", "AI 原生组织", "系统性机会", "认知杠杆",
+  "软件 3.0", "业务操作系统", "智能体网络", "垂直 AI 入口", "工作流重构",
+  "数据飞轮", "第二大脑", "企业记忆层", "任务编排层", "人机协同界面",
+  "判断力自动化", "专家模型商品化", "AI 中间层", "新型生产关系", "组织神经系统",
+];
+const CONCEPT_POOLS = [AI_TECH_POOL, SOCIAL_POOL, VC_NARRATIVE_POOL];
+const LOCAL_POOL = [...AI_TECH_POOL, ...SOCIAL_POOL, ...VC_NARRATIVE_POOL];
 
 const PERSONAS = {
   ragdoll: { name: "性冷淡极简派" },
@@ -69,16 +83,22 @@ const CATWISDOM = [
   "听起来很蠢,但最蠢的点子往往能融到钱。",
 ];
 
-function pickEntries(raw, pool, rng) {
+function pickEntries(raw) {
   const seen = [];
   for (const ch of raw) {
     if (ch.trim() && !seen.includes(ch)) seen.push(ch);
   }
   const chars = seen.slice(0, 7);
   if (!chars.length) {
-    return [0, 1, 2, 3, 4].map((i) => ({ char: "·", title: pool[Math.floor(rng() * pool.length)] }));
+    return [0, 1, 2, 3, 4].map((i) => {
+      const pool = CONCEPT_POOLS[i % CONCEPT_POOLS.length];
+      return { char: "·", title: pool[(183 + i * 17) % pool.length] };
+    });
   }
-  return chars.map((ch) => ({ char: ch, title: pool[ch.charCodeAt(0) % pool.length] }));
+  return chars.map((ch, i) => {
+    const pool = CONCEPT_POOLS[i % CONCEPT_POOLS.length];
+    return { char: ch, title: pool[(ch.charCodeAt(0) + i * 17) % pool.length] };
+  });
 }
 
 /* 本地破译:把词条拼成一个产品创意 */
@@ -86,7 +106,7 @@ function localIdea(rawText, personaKey) {
   const raw = (rawText || "").trim();
   const rng = mulberry32(hashSeed(raw + "|" + personaKey));
   const persona = PERSONAS[personaKey] || PERSONAS.ragdoll;
-  const entries = pickEntries(raw, LOCAL_POOL, rng);
+  const entries = pickEntries(raw);
   const words = entries.map((e) => e.title);
   const a = words[0] || "随机性";
   const b = words[1] || words[0] || "猫";
@@ -111,6 +131,7 @@ function localIdea(rawText, personaKey) {
       productName: `${a.slice(0, 4)}${b.slice(0, 2)}`,
       tagline: tagFn(a, b),
       concept: `只取「${usedConcepts.join("」「")}」这${usedConcepts.length}个概念:做一个围绕${a}、借用${b}机制的产品。其余词条太无聊,猫一爪划掉了。`,
+      coreUsage: `用户先把一个模糊需求或今天的糟心场景丢进去,系统用${a}生成第一版行动入口,再用${b}把结果包装成一个可分享的小任务。最后用户得到一张能直接发给同事、朋友或老板的执行卡片,假装这不是猫想出来的。`,
       targetUser: "没灵感又不想加班的产品经理",
       features: feats,
       techVibe: pick(rng, TECHVIBE),
