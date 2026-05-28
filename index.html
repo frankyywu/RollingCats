@@ -12,48 +12,48 @@
       <div class="logo">🐾</div>
       <h1>喵机妙算</h1>
       <div class="en">Meowracle Machine</div>
-      <div class="sub">让猫在你的键盘上滚一圈,让 AI 解释命运。</div>
+      <div class="sub">让猫在键盘上滚一圈,把乱码破译成你的下一个产品创意。</div>
     </header>
 
     <section class="panel">
-      <label class="field">选择今日值班的猫神人格</label>
+      <label class="field">选择今日产品军师猫(决定创意风格)</label>
       <select id="persona">
-        <option value="ragdoll">冷淡布偶神</option>
-        <option value="orange">暴躁橘猫神</option>
-        <option value="black">阴湿黑猫神</option>
-        <option value="calico">赛博三花神</option>
-        <option value="siamese">油腻暹罗神</option>
-        <option value="tabby">加班狸花神</option>
+        <option value="ragdoll">性冷淡极简派 · 冷淡布偶</option>
+        <option value="orange">激进颠覆派 · 暴躁橘猫</option>
+        <option value="black">暗黑增长派 · 阴湿黑猫</option>
+        <option value="calico">AI 原生派 · 赛博三花</option>
+        <option value="siamese">商业变现派 · 油腻暹罗</option>
+        <option value="tabby">打工人体恤派 · 加班狸花</option>
       </select>
 
       <!-- 降临台:实时捕捉猫滚动时按出的按键流 -->
       <div id="stage" class="stage idle">
         <div id="stageIdle" class="stage-idle">
           <div class="stage-emoji">⌨️🐈</div>
-          <p class="stage-tip">把猫抱到键盘上,让它滚一圈、踩几脚、用尾巴扫一下。<br/>点下面的按钮开始,猫每按一个键都会被猫神记录。</p>
-          <button class="primary big" id="startBtn">🐾 开始降临(把猫放上键盘)</button>
-          <button class="linklike" id="humanBtn">没有猫?我自己伪装一下 →</button>
+          <p class="stage-tip">把猫抱到键盘上,让它滚一圈、踩几脚、用尾巴扫一下。<br/>它每按一个键,都会从词库里召唤一个真实概念,最后由猫军师破译成产品创意。</p>
+          <button class="primary big" id="startBtn">🐾 开始(把猫放上键盘)</button>
+          <button class="linklike" id="humanBtn">没有猫?我自己乱敲一行 →</button>
         </div>
 
         <div id="stageLive" class="stage-live hidden">
-          <div class="live-status"><span class="dot"></span> 猫神降临中…(滚完后按空格之外任意角落的「收谕」)</div>
+          <div class="live-status"><span class="dot"></span> 猫正在召唤概念…(滚完后点下面的「破译创意」)</div>
           <div id="liveStream" class="live-stream"></div>
           <div class="live-meters">
             <div><span id="mCount">0</span><small>击键</small></div>
             <div><span id="mDur">0.0</span><small>秒</small></div>
             <div><span id="mRate">0.0</span><small>键/秒</small></div>
           </div>
-          <button class="primary big" id="stopBtn">✨ 猫滚完了,收谕</button>
+          <button class="primary big" id="stopBtn">✨ 猫滚完了,破译创意</button>
         </div>
       </div>
-      <div class="disclaimer">本产品由“猫的随机性 + AI 胡说”驱动,不构成任何人生建议。猫不为后果负责。</div>
+      <div class="disclaimer">本产品由「猫的随机性 + 维基随机词条 + AI 硬凑」驱动,创意仅供 vibe,不构成商业建议。猫不为融资失败负责。</div>
     </section>
 
     <section id="cardWrap" class="hidden"></section>
 
     <div class="foot">
-      人类负责焦虑,猫负责乱按,AI 负责胡说八道。<br />
-      星座属于天上,塔罗属于桌上,命运属于猫的屁股。
+      人类负责立项,猫负责乱按,AI 负责硬凑创意。<br />
+      别人靠用户调研,你靠猫的屁股。
     </div>
   </div>
 
@@ -124,18 +124,53 @@
       refreshMeters();
     }
 
-    function stopCapture(forceMode) {
+    function stopCapture() {
       capturing = false;
-      const durationMs = performance.now() - startTs;
       const text = buffer.trim();
-      const metrics = forceMode === "human"
-        ? null
-        : { count: buffer.length, durationMs, unique: new Set([...buffer]).size };
-      const mode = forceMode || "live";
       const finalText = text || cap.value.trim();
-      const res = window.MeowOracle.interpret(finalText, $("#persona").value, mode, metrics);
       setStage("idle");
+      runOracle(finalText, $("#persona").value);
+    }
+
+    // 流程：先用本地引擎兜底出完整结构，再请服务端（维基随机词条 + AI 破译）覆盖。
+    // 服务不可用时静默回退到本地破译。
+    async function runOracle(finalText, persona) {
+      let res = window.MeowOracle.localIdea(finalText, persona);
+      res.raw = finalText;
+      res.aiPowered = false;
+      showLoading();
+      try {
+        const r = await fetch("/api/oracle", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ raw: finalText, persona }),
+        });
+        const data = await r.json();
+        if (data && data.ok && data.idea) {
+          res = {
+            raw: finalText,
+            entries: Array.isArray(data.entries) && data.entries.length ? data.entries : res.entries,
+            personaName: data.personaName || res.personaName,
+            idea: data.idea,
+            meters: data.meters || res.meters,
+            aiPowered: true,
+          };
+        }
+      } catch (e) {
+        // 网络/服务异常：保留本地破译
+      }
       render(res);
+    }
+
+    function showLoading() {
+      $("#cardWrap").innerHTML = `
+        <div class="card loading-card">
+          <div class="loading-cat">🐈‍⬛✨</div>
+          <div class="loading-text">猫军师正在破译这串乱码…</div>
+          <div class="loading-sub">（正在从维基百科召唤随机概念，再让 AI 硬凑成产品创意）</div>
+        </div>`;
+      $("#cardWrap").classList.remove("hidden");
+      $("#cardWrap").scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
     // 猫可能踩到屏幕/触控板 → 兜底:把焦点抓在隐藏输入框
@@ -147,66 +182,65 @@
 
     // 人类伪装:弹个输入,系统鄙视你
     $("#humanBtn").addEventListener("click", () => {
-      const t = prompt("人类伪装猫输入(随便乱敲一行,猫神会鄙视你):", "");
+      const t = prompt("没有猫?自己乱敲一行当种子(猫军师不保证质量):", "");
       if (t == null) return;
-      const res = window.MeowOracle.interpret(t.trim(), $("#persona").value, "human", null);
-      render(res);
+      runOracle(t.trim(), $("#persona").value);
     });
 
-    /* ---------- 渲染猫谕卡 ---------- */
+    /* ---------- 渲染产品创意卡 ---------- */
     function render(res) {
-      const m = res.metrics;
-      const metricsBox = m ? `
-        <div class="section-title">本次降临数据</div>
-        <div class="grid2">
-          <div class="box"><div class="k">猫停留时长</div><div class="v">${(m.durationMs/1000).toFixed(1)} 秒</div></div>
-          <div class="box"><div class="k">击键次数</div><div class="v">${m.count} 次</div></div>
-          <div class="box"><div class="k">独特按键</div><div class="v">${m.unique} 种</div></div>
-          <div class="box"><div class="k">狂暴指数</div><div class="v">${(m.count/Math.max(0.1,m.durationMs/1000)).toFixed(1)} 键/秒</div></div>
-        </div>` : "";
+      const idea = res.idea || {};
+      const entries = res.entries || [];
+      const meters = res.meters || {};
+      const feats = Array.isArray(idea.features) ? idea.features : [];
+
+      const used = Array.isArray(idea.usedConcepts) ? idea.usedConcepts : [];
+      const isUsed = (title) => used.some((u) => u && (u === title || u.includes(title) || title.includes(u)));
+      const usedCount = entries.filter((e) => isUsed(e.title)).length;
+      const entriesBox = `
+        <div class="section-title">猫从词库召唤的概念 ${entries.length ? `<small class="dim">(${usedCount}/${entries.length} 有料,其余被猫划掉)</small>` : ""}</div>
+        <div class="entries">
+          ${entries.map((e) => `<div class="entry ${isUsed(e.title) ? "used" : "ignored"}"><span class="ec">${escapeHtml(e.char)}</span><span class="ea">→</span><span class="et">${escapeHtml(e.title)}</span></div>`).join("")}
+        </div>`;
 
       const html = `
         <div class="card" id="card">
           <div class="head">
-            <span class="title">🐾 今日猫谕</span>
-            <span class="persona">值班:${res.personaName}</span>
+            <span class="title">🐾 猫滚出的产品创意</span>
+            <span class="persona">军师:${escapeHtml(res.personaName || "")}${res.aiPowered ? ' · <em class="ai-badge">AI 破译</em>' : ' · <em class="ai-badge offline">本地破译</em>'}</span>
           </div>
           <div class="body">
-            <div class="oracle-raw">${escapeHtml(res.raw) || "（猫只是路过,什么都没踩——空白也是一种神谕）"}</div>
-            ${res.modeNote ? `<div class="mode-note">${res.modeNote}</div>` : ""}
-            ${metricsBox}
+            <div class="oracle-raw">${escapeHtml(res.raw) || "（猫只是路过,什么都没踩——那就随机召唤几个概念吧）"}</div>
 
-            <div class="section-title">猫神解读</div>
-            <div class="reading">${escapeHtml(res.reading)}</div>
+            ${entriesBox}
 
-            <div class="section-title">今日关键词</div>
-            <div class="kw">${res.keywords.map((k) => `<span>#${escapeHtml(k)}</span>`).join("")}</div>
+            <div class="product-name">${escapeHtml(idea.productName || "无名产品")}</div>
+            <div class="tagline">${escapeHtml(idea.tagline || "")}</div>
+
+            <div class="section-title">核心创意</div>
+            <div class="reading">${escapeHtml(idea.concept || "")}</div>
+
+            <div class="section-title">关键功能</div>
+            <ul class="features">${feats.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}</ul>
 
             <div class="grid2">
-              <div class="box"><div class="k">今日建议</div><div class="v">${escapeHtml(res.advice)}</div></div>
-              <div class="box"><div class="k">幸运物</div><div class="v">${escapeHtml(res.lucky)}</div></div>
-              <div class="box"><div class="k">今日忌</div><div class="v">${escapeHtml(res.taboo)}</div></div>
-              <div class="box"><div class="k">被猫审判指数</div><div class="v">${res.judgeScore}% · ${escapeHtml(res.judge)}</div></div>
+              <div class="box"><div class="k">目标用户</div><div class="v">${escapeHtml(idea.targetUser || "")}</div></div>
+              <div class="box"><div class="k">技术栈氛围</div><div class="v">${escapeHtml(idea.techVibe || "")}</div></div>
             </div>
 
-            <div class="section-title">人猫关系诊断</div>
-            <div class="box"><div class="v">${escapeHtml(res.relation)}</div></div>
-
-            <div class="section-title">人类误读警告</div>
-            <div class="warn">${escapeHtml(res.misread)}</div>
+            <div class="section-title">猫军师毒舌点评</div>
+            <div class="warn">${escapeHtml(idea.catWisdom || "")}</div>
 
             <div class="meters">
-              <div class="meter"><div class="lab"><span>神谕可信度</span><span>${res.trust}%</span></div><div class="bar"><div class="fill trust" style="width:${res.trust}%"></div></div></div>
-              <div class="meter"><div class="lab"><span>情绪安慰度</span><span>${res.comfort}%</span></div><div class="bar"><div class="fill comfort" style="width:${res.comfort}%"></div></div></div>
-              <div class="meter"><div class="lab"><span>胡说八道浓度</span><span>${res.nonsense}%</span></div><div class="bar"><div class="fill nonsense" style="width:${res.nonsense}%"></div></div></div>
+              <div class="meter"><div class="lab"><span>落地可行性</span><span>${meters.feasibility ?? 0}%</span></div><div class="bar"><div class="fill trust" style="width:${meters.feasibility ?? 0}%"></div></div></div>
+              <div class="meter"><div class="lab"><span>vibe 浓度</span><span>${meters.vibe ?? 0}%</span></div><div class="bar"><div class="fill comfort" style="width:${meters.vibe ?? 0}%"></div></div></div>
+              <div class="meter"><div class="lab"><span>投资人困惑度</span><span>${meters.investorConfusion ?? 0}%</span></div><div class="bar"><div class="fill nonsense" style="width:${meters.investorConfusion ?? 0}%"></div></div></div>
             </div>
-
-            <div class="sign">${escapeHtml(res.personaSign)}</div>
           </div>
         </div>
         <div class="actions">
-          <button class="ghost" id="copyBtn">📋 复制猫谕去分享</button>
-          <button class="ghost" id="againBtn">🐾 再让猫滚一圈</button>
+          <button class="ghost" id="copyBtn">📋 复制创意去立项</button>
+          <button class="ghost" id="againBtn">🐾 再让猫滚一个</button>
         </div>`;
       $("#cardWrap").innerHTML = html;
       $("#cardWrap").classList.remove("hidden");
@@ -216,20 +250,26 @@
     }
 
     function copyText(res) {
+      const idea = res.idea || {};
+      const entries = res.entries || [];
+      const meters = res.meters || {};
+      const feats = Array.isArray(idea.features) ? idea.features : [];
       const t =
-`🐾 今日猫谕(${res.personaName})
-${res.raw}
+`🐾 猫滚出的产品创意 · ${idea.productName || ""}(军师:${res.personaName || ""})
+乱码种子:${res.raw}
+召唤概念:${entries.map((e) => e.title).join("、")}
+采用概念:${(Array.isArray(idea.usedConcepts) && idea.usedConcepts.length ? idea.usedConcepts : ["—"]).join("、")}
 
-【解读】${res.reading.replace(/\n\n/g, " ")}
-【关键词】${res.keywords.map((k) => "#" + k).join(" ")}
-【建议】${res.advice}
-【幸运物】${res.lucky}　【忌】${res.taboo}
-【人猫关系】${res.relation}
-【人类误读警告】${res.misread}
-神谕可信度 ${res.trust}% · 情绪安慰度 ${res.comfort}% · 胡说八道浓度 ${res.nonsense}%
+【定位】${idea.tagline || ""}
+【核心创意】${idea.concept || ""}
+【关键功能】${feats.join(" / ")}
+【目标用户】${idea.targetUser || ""}
+【技术栈氛围】${idea.techVibe || ""}
+【猫军师点评】${idea.catWisdom || ""}
+落地可行性 ${meters.feasibility ?? 0}% · vibe 浓度 ${meters.vibe ?? 0}% · 投资人困惑度 ${meters.investorConfusion ?? 0}%
 —— 喵机妙算 Meowracle Machine`;
       navigator.clipboard?.writeText(t).then(
-        () => { const b = $("#copyBtn"); b.textContent = "✅ 已复制,去发朋友圈"; setTimeout(() => (b.textContent = "📋 复制猫谕去分享"), 1800); },
+        () => { const b = $("#copyBtn"); b.textContent = "✅ 已复制,去立项"; setTimeout(() => (b.textContent = "📋 复制创意去立项"), 1800); },
         () => alert(t)
       );
     }

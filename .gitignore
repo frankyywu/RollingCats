@@ -1,0 +1,10 @@
+# 密钥：绝不提交
+.nvidia_key
+.env
+*.key
+
+# 本地工具/缓存
+.claude/
+__pycache__/
+*.pyc
+.DS_Store
