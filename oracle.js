@@ -194,14 +194,38 @@ const PERSONAS = {
 
 function rangePick(rng, [lo, hi]) { return Math.round(lo + rng() * (hi - lo)); }
 
+/* ---------- 行为解读:读懂“猫怎么滚的”,不只是“滚出了什么” ---------- */
+function buildBehaviorReading(m, rng) {
+  if (!m || !m.count) return "";
+  const sec = Math.max(0.1, (m.durationMs || 0) / 1000);
+  const rate = m.count / sec; // 击键/秒
+  if (rate >= 6) {
+    return pick(rng, [
+      `猫在键盘上只停留了 ${sec.toFixed(1)} 秒,却按下 ${m.count} 次——这是一场暴烈的降临。它替你把今天想发的脾气一次性发完了,你不必再发了。`,
+      `${m.count} 次击键塞进 ${sec.toFixed(1)} 秒,密度惊人。猫神在用最快的方式告诉你:有件事别再拖,现在就做。`,
+    ]);
+  }
+  if (rate <= 1.2) {
+    return pick(rng, [
+      `猫慢条斯理地滚了 ${sec.toFixed(1)} 秒,只按了 ${m.count} 次——它在示范什么叫从容。今天的你也被允许慢一点。`,
+      `这是一次克制的降临:${sec.toFixed(1)} 秒、${m.count} 键。少即是多,今天别贪。`,
+    ]);
+  }
+  return pick(rng, [
+    `猫滚了 ${sec.toFixed(1)} 秒、按了 ${m.count} 次,节奏不疾不徐——宇宙的意思是:今天按部就班最好,别整花活。`,
+  ]);
+}
+
 /* ---------- 主入口 ---------- */
-function interpret(rawText, personaKey, mode) {
+function interpret(rawText, personaKey, mode, metrics) {
   const text = (rawText || "").trim();
   const persona = PERSONAS[personaKey] || PERSONAS.ragdoll;
   const seed = hashSeed(text + "|" + personaKey);
   const rng = mulberry32(seed);
   const f = extractFeatures(text);
   const reading = buildReadings(f, rng);
+  const behavior = buildBehaviorReading(metrics, rng);
+  if (behavior) reading.text = behavior + "\n\n" + reading.text;
 
   const result = {
     raw: text,
@@ -222,6 +246,7 @@ function interpret(rawText, personaKey, mode) {
     modeNote: mode === "human"
       ? "（系统检测到这串乱码过于工整。人类伪装猫输入——猫神鄙视你,但还是会算。）"
       : "",
+    metrics: metrics || null,
   };
   return result;
 }

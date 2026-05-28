@@ -12,22 +12,10 @@
       <div class="logo">🐾</div>
       <h1>喵机妙算</h1>
       <div class="en">Meowracle Machine</div>
-      <div class="sub">让猫踩出乱码,让 AI 解释命运。</div>
+      <div class="sub">让猫在你的键盘上滚一圈,让 AI 解释命运。</div>
     </header>
 
     <section class="panel">
-      <label class="field">让猫神降临键盘(或替它召唤一段乱码)</label>
-      <textarea id="input" placeholder="]]]]]]ppppp0000---  ← 邀请猫路过、踩一下、用尾巴扫一下"></textarea>
-
-      <label class="field">猫神今天以什么身体部位降临?</label>
-      <div class="row" id="modes">
-        <button class="chip active" data-mode="paw">🐾 猫爪输入</button>
-        <button class="chip" data-mode="tail">〰️ 猫尾巴输入</button>
-        <button class="chip" data-mode="butt">🍑 猫屁股输入</button>
-        <button class="chip" data-mode="oracle">✨ 模拟猫神</button>
-        <button class="chip" data-mode="human">🧍 人类伪装猫</button>
-      </div>
-
       <label class="field">选择今日值班的猫神人格</label>
       <select id="persona">
         <option value="ragdoll">冷淡布偶神</option>
@@ -38,11 +26,27 @@
         <option value="tabby">加班狸花神</option>
       </select>
 
-      <div class="actions">
-        <button class="primary" id="divine">解读今日猫谕</button>
-        <button class="ghost" id="summon">🎲 召唤猫神乱按</button>
+      <!-- 降临台:实时捕捉猫滚动时按出的按键流 -->
+      <div id="stage" class="stage idle">
+        <div id="stageIdle" class="stage-idle">
+          <div class="stage-emoji">⌨️🐈</div>
+          <p class="stage-tip">把猫抱到键盘上,让它滚一圈、踩几脚、用尾巴扫一下。<br/>点下面的按钮开始,猫每按一个键都会被猫神记录。</p>
+          <button class="primary big" id="startBtn">🐾 开始降临(把猫放上键盘)</button>
+          <button class="linklike" id="humanBtn">没有猫?我自己伪装一下 →</button>
+        </div>
+
+        <div id="stageLive" class="stage-live hidden">
+          <div class="live-status"><span class="dot"></span> 猫神降临中…(滚完后按空格之外任意角落的「收谕」)</div>
+          <div id="liveStream" class="live-stream"></div>
+          <div class="live-meters">
+            <div><span id="mCount">0</span><small>击键</small></div>
+            <div><span id="mDur">0.0</span><small>秒</small></div>
+            <div><span id="mRate">0.0</span><small>键/秒</small></div>
+          </div>
+          <button class="primary big" id="stopBtn">✨ 猫滚完了,收谕</button>
+        </div>
       </div>
-      <div class="disclaimer">本产品由“随机性 + AI 胡说”驱动,不构成任何人生建议。猫不为后果负责。</div>
+      <div class="disclaimer">本产品由“猫的随机性 + AI 胡说”驱动,不构成任何人生建议。猫不为后果负责。</div>
     </section>
 
     <section id="cardWrap" class="hidden"></section>
@@ -53,48 +57,114 @@
     </div>
   </div>
 
+  <!-- 隐藏输入框:真正接收猫的键盘事件 -->
+  <textarea id="capture" class="capture-hidden" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+
   <script src="oracle.js"></script>
   <script>
-    let mode = "paw";
     const $ = (s) => document.querySelector(s);
+    let capturing = false, startTs = 0, lastChar = "", buffer = "";
+    const cap = $("#capture");
 
-    document.querySelectorAll("#modes .chip").forEach((c) => {
-      c.addEventListener("click", () => {
-        document.querySelectorAll("#modes .chip").forEach((x) => x.classList.remove("active"));
-        c.classList.add("active");
-        mode = c.dataset.mode;
-      });
-    });
-
-    // 不同身体部位 → 不同形态的乱码(让“屁股/尾巴”真的有区别)
-    function summon() {
-      const r = () => Math.random();
-      const repeat = (ch, n) => ch.repeat(n);
-      let out = "";
-      if (mode === "tail") {
-        const pool = "asdfjkl-_~=";
-        const sweeps = 2 + Math.floor(r() * 3);
-        for (let i = 0; i < sweeps; i++) out += repeat(pool[Math.floor(r() * pool.length)], 4 + Math.floor(r() * 8));
-      } else if (mode === "butt") {
-        const pool = "[]{}()0=#@*-_./;'";
-        for (let i = 0; i < 14 + Math.floor(r() * 10); i++) out += pool[Math.floor(r() * pool.length)];
-      } else if (mode === "oracle") {
-        const pool = "abcdefghijklmnop[]{}0123=-_";
-        for (let i = 0; i < 12 + Math.floor(r() * 8); i++) out += pool[Math.floor(r() * pool.length)];
-      } else { // paw
-        const pool = "qwertasdfgzxcvp[]()0=-";
-        const blocks = 3 + Math.floor(r() * 3);
-        for (let i = 0; i < blocks; i++) {
-          const ch = pool[Math.floor(r() * pool.length)];
-          out += repeat(ch, 1 + Math.floor(r() * 4));
-        }
-      }
-      $("#input").value = out;
+    function setStage(state) {
+      $("#stage").className = "stage " + state;
+      $("#stageIdle").classList.toggle("hidden", state !== "idle");
+      $("#stageLive").classList.toggle("hidden", state !== "live");
     }
 
-    function bar(v) { return `<div class="bar"><div class="fill" style="width:${v}%"></div></div>`; }
+    function spawnPaw(ch) {
+      const el = document.createElement("span");
+      el.className = "paw-pop";
+      el.textContent = /\s/.test(ch) ? "🐾" : ch;
+      el.style.left = (10 + Math.random() * 80) + "%";
+      el.style.fontSize = (16 + Math.random() * 26) + "px";
+      el.style.setProperty("--rot", (Math.random() * 60 - 30) + "deg");
+      $("#liveStream").appendChild(el);
+      setTimeout(() => el.remove(), 1200);
+    }
 
+    function refreshMeters() {
+      const sec = (performance.now() - startTs) / 1000;
+      $("#mCount").textContent = buffer.length;
+      $("#mDur").textContent = sec.toFixed(1);
+      $("#mRate").textContent = (buffer.length / Math.max(0.1, sec)).toFixed(1);
+    }
+
+    function onKey(e) {
+      if (!capturing) return;
+      // 拦截,免得猫触发浏览器快捷键/刷新/导航
+      if (e.key === "Tab" || e.key === " " || e.key === "/" || e.key === "'" ) e.preventDefault();
+      let ch = "";
+      if (e.key.length === 1) ch = e.key;
+      else if (e.key === "Enter") ch = "\n";
+      else if (e.key === "Tab") ch = "\t";
+      else return; // 纯修饰键(Shift/Ctrl…)不计入字符
+      buffer += ch;
+      lastChar = ch;
+      // 实时大字流:只保留尾部一段,避免猫滚太久爆屏
+      const tail = buffer.slice(-40);
+      $("#liveStream").dataset.tail = tail;
+      const stamp = document.createElement("b");
+      stamp.textContent = /\s/.test(ch) ? "·" : ch;
+      $("#liveStream").appendChild(stamp);
+      while ($("#liveStream").querySelectorAll("b").length > 40) {
+        $("#liveStream").querySelector("b").remove();
+      }
+      spawnPaw(ch);
+      refreshMeters();
+    }
+
+    function startCapture() {
+      buffer = ""; lastChar = ""; startTs = performance.now();
+      capturing = true;
+      $("#liveStream").innerHTML = "";
+      setStage("live");
+      cap.value = "";
+      cap.focus();
+      refreshMeters();
+    }
+
+    function stopCapture(forceMode) {
+      capturing = false;
+      const durationMs = performance.now() - startTs;
+      const text = buffer.trim();
+      const metrics = forceMode === "human"
+        ? null
+        : { count: buffer.length, durationMs, unique: new Set([...buffer]).size };
+      const mode = forceMode || "live";
+      const finalText = text || cap.value.trim();
+      const res = window.MeowOracle.interpret(finalText, $("#persona").value, mode, metrics);
+      setStage("idle");
+      render(res);
+    }
+
+    // 猫可能踩到屏幕/触控板 → 兜底:把焦点抓在隐藏输入框
+    cap.addEventListener("keydown", onKey);
+    document.addEventListener("keydown", (e) => { if (capturing && document.activeElement !== cap) onKey(e); });
+
+    $("#startBtn").addEventListener("click", startCapture);
+    $("#stopBtn").addEventListener("click", () => stopCapture());
+
+    // 人类伪装:弹个输入,系统鄙视你
+    $("#humanBtn").addEventListener("click", () => {
+      const t = prompt("人类伪装猫输入(随便乱敲一行,猫神会鄙视你):", "");
+      if (t == null) return;
+      const res = window.MeowOracle.interpret(t.trim(), $("#persona").value, "human", null);
+      render(res);
+    });
+
+    /* ---------- 渲染猫谕卡 ---------- */
     function render(res) {
+      const m = res.metrics;
+      const metricsBox = m ? `
+        <div class="section-title">本次降临数据</div>
+        <div class="grid2">
+          <div class="box"><div class="k">猫停留时长</div><div class="v">${(m.durationMs/1000).toFixed(1)} 秒</div></div>
+          <div class="box"><div class="k">击键次数</div><div class="v">${m.count} 次</div></div>
+          <div class="box"><div class="k">独特按键</div><div class="v">${m.unique} 种</div></div>
+          <div class="box"><div class="k">狂暴指数</div><div class="v">${(m.count/Math.max(0.1,m.durationMs/1000)).toFixed(1)} 键/秒</div></div>
+        </div>` : "";
+
       const html = `
         <div class="card" id="card">
           <div class="head">
@@ -102,8 +172,9 @@
             <span class="persona">值班:${res.personaName}</span>
           </div>
           <div class="body">
-            <div class="oracle-raw">${escapeHtml(res.raw) || "（空白也是一种神谕）"}</div>
+            <div class="oracle-raw">${escapeHtml(res.raw) || "（猫只是路过,什么都没踩——空白也是一种神谕）"}</div>
             ${res.modeNote ? `<div class="mode-note">${res.modeNote}</div>` : ""}
+            ${metricsBox}
 
             <div class="section-title">猫神解读</div>
             <div class="reading">${escapeHtml(res.reading)}</div>
@@ -135,14 +206,13 @@
         </div>
         <div class="actions">
           <button class="ghost" id="copyBtn">📋 复制猫谕去分享</button>
-          <button class="ghost" id="againBtn">🔁 换个人格再算</button>
+          <button class="ghost" id="againBtn">🐾 再让猫滚一圈</button>
         </div>`;
       $("#cardWrap").innerHTML = html;
       $("#cardWrap").classList.remove("hidden");
       $("#cardWrap").scrollIntoView({ behavior: "smooth", block: "start" });
-
       $("#copyBtn").addEventListener("click", () => copyText(res));
-      $("#againBtn").addEventListener("click", () => $("#card").scrollIntoView());
+      $("#againBtn").addEventListener("click", () => { $("#cardWrap").classList.add("hidden"); window.scrollTo({ top: 0, behavior: "smooth" }); startCapture(); });
     }
 
     function copyText(res) {
@@ -167,14 +237,6 @@ ${res.raw}
     function escapeHtml(s) {
       return String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
     }
-
-    $("#summon").addEventListener("click", summon);
-    $("#divine").addEventListener("click", () => {
-      let text = $("#input").value.trim();
-      if (!text) { summon(); text = $("#input").value.trim(); }
-      const res = window.MeowOracle.interpret(text, $("#persona").value, mode);
-      render(res);
-    });
   </script>
 </body>
 </html>
