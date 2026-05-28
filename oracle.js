@@ -84,20 +84,26 @@ const CATWISDOM = [
 ];
 
 function pickEntries(raw) {
-  const seen = [];
-  for (const ch of raw) {
-    if (ch.trim() && !seen.includes(ch)) seen.push(ch);
+  const stream = [...raw].filter((ch) => ch.trim());
+  let picks = [];
+  if (stream.length <= 7) {
+    picks = stream.map((ch, pos) => ({ ch, pos }));
+  } else {
+    const last = stream.length - 1;
+    picks = Array.from({ length: 7 }, (_, i) => {
+      const pos = Math.round((i * last) / 6);
+      return { ch: stream[pos], pos };
+    });
   }
-  const chars = seen.slice(0, 7);
-  if (!chars.length) {
+  if (!picks.length) {
     return [0, 1, 2, 3, 4].map((i) => {
       const pool = CONCEPT_POOLS[i % CONCEPT_POOLS.length];
       return { char: "·", title: pool[(183 + i * 17) % pool.length] };
     });
   }
-  return chars.map((ch, i) => {
+  return picks.map(({ ch, pos }, i) => {
     const pool = CONCEPT_POOLS[i % CONCEPT_POOLS.length];
-    return { char: ch, title: pool[(ch.charCodeAt(0) + i * 17) % pool.length] };
+    return { char: ch, title: pool[(ch.charCodeAt(0) + pos * 17) % pool.length] };
   });
 }
 

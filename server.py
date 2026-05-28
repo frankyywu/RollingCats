@@ -132,18 +132,20 @@ SYSTEM_PROMPT = """你是“喵言机 Meowracle Machine”的产品破译引擎�
 
 
 def pick_entries(raw):
-    """每个（首次出现的）字母 → 按位置轮询三池词库，取出一个概念。"""
-    seen = []
-    for ch in raw:
-        if ch.strip() and ch not in seen:
-            seen.append(ch)
-    chars = seen[:MAX_CONCEPTS]
+    """从整段猫步里均匀抽样，而不是只看开头几个字符。"""
+    stream = [ch for ch in raw if ch.strip()]
+    if len(stream) <= MAX_CONCEPTS:
+        picks = list(enumerate(stream))
+    else:
+        last = len(stream) - 1
+        picks = [(round(i * last / (MAX_CONCEPTS - 1)), stream[round(i * last / (MAX_CONCEPTS - 1))]) for i in range(MAX_CONCEPTS)]
+    chars = picks
     if not chars:
-        chars = ["·"] * 5
+        chars = [(i, "·") for i in range(5)]
     entries = []
-    for i, ch in enumerate(chars):
+    for i, (pos, ch) in enumerate(chars):
         pool = CONCEPT_POOLS[i % len(CONCEPT_POOLS)]
-        entries.append({"char": ch, "title": pool[(ord(ch) + i * 17) % len(pool)]})
+        entries.append({"char": ch, "title": pool[(ord(ch) + pos * 17) % len(pool)]})
     return entries
 
 
