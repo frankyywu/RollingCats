@@ -16,6 +16,7 @@
 - 本地兜底模式：服务端或 API key 不可用时仍可演示。
 
 
+https://github.com/user-attachments/assets/b78530e8-a218-44ab-9b8b-ffe8026e2770
 
 
 
