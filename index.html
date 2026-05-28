@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>喵机妙算 · Meowracle Machine</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">🐾</div>
+      <h1>喵机妙算</h1>
+      <div class="en">Meowracle Machine</div>
+      <div class="sub">让猫踩出乱码,让 AI 解释命运。</div>
+    </header>
+
+    <section class="panel">
+      <label class="field">让猫神降临键盘(或替它召唤一段乱码)</label>
+      <textarea id="input" placeholder="]]]]]]ppppp0000---  ← 邀请猫路过、踩一下、用尾巴扫一下"></textarea>
+
+      <label class="field">猫神今天以什么身体部位降临?</label>
+      <div class="row" id="modes">
+        <button class="chip active" data-mode="paw">🐾 猫爪输入</button>
+        <button class="chip" data-mode="tail">〰️ 猫尾巴输入</button>
+        <button class="chip" data-mode="butt">🍑 猫屁股输入</button>
+        <button class="chip" data-mode="oracle">✨ 模拟猫神</button>
+        <button class="chip" data-mode="human">🧍 人类伪装猫</button>
+      </div>
+
+      <label class="field">选择今日值班的猫神人格</label>
+      <select id="persona">
+        <option value="ragdoll">冷淡布偶神</option>
+        <option value="orange">暴躁橘猫神</option>
+        <option value="black">阴湿黑猫神</option>
+        <option value="calico">赛博三花神</option>
+        <option value="siamese">油腻暹罗神</option>
+        <option value="tabby">加班狸花神</option>
+      </select>
+
+      <div class="actions">
+        <button class="primary" id="divine">解读今日猫谕</button>
+        <button class="ghost" id="summon">🎲 召唤猫神乱按</button>
+      </div>
+      <div class="disclaimer">本产品由“随机性 + AI 胡说”驱动,不构成任何人生建议。猫不为后果负责。</div>
+    </section>
+
+    <section id="cardWrap" class="hidden"></section>
+
+    <div class="foot">
+      人类负责焦虑,猫负责乱按,AI 负责胡说八道。<br />
+      星座属于天上,塔罗属于桌上,命运属于猫的屁股。
+    </div>
+  </div>
+
+  <script src="oracle.js"></script>
+  <script>
+    let mode = "paw";
+    const $ = (s) => document.querySelector(s);
+
+    document.querySelectorAll("#modes .chip").forEach((c) => {
+      c.addEventListener("click", () => {
+        document.querySelectorAll("#modes .chip").forEach((x) => x.classList.remove("active"));
+        c.classList.add("active");
+        mode = c.dataset.mode;
+      });
+    });
+
+    // 不同身体部位 → 不同形态的乱码(让“屁股/尾巴”真的有区别)
+    function summon() {
+      const r = () => Math.random();
+      const repeat = (ch, n) => ch.repeat(n);
+      let out = "";
+      if (mode === "tail") {
+        const pool = "asdfjkl-_~=";
+        const sweeps = 2 + Math.floor(r() * 3);
+        for (let i = 0; i < sweeps; i++) out += repeat(pool[Math.floor(r() * pool.length)], 4 + Math.floor(r() * 8));
+      } else if (mode === "butt") {
+        const pool = "[]{}()0=#@*-_./;'";
+        for (let i = 0; i < 14 + Math.floor(r() * 10); i++) out += pool[Math.floor(r() * pool.length)];
+      } else if (mode === "oracle") {
+        const pool = "abcdefghijklmnop[]{}0123=-_";
+        for (let i = 0; i < 12 + Math.floor(r() * 8); i++) out += pool[Math.floor(r() * pool.length)];
+      } else { // paw
+        const pool = "qwertasdfgzxcvp[]()0=-";
+        const blocks = 3 + Math.floor(r() * 3);
+        for (let i = 0; i < blocks; i++) {
+          const ch = pool[Math.floor(r() * pool.length)];
+          out += repeat(ch, 1 + Math.floor(r() * 4));
+        }
+      }
+      $("#input").value = out;
+    }
+
+    function bar(v) { return `<div class="bar"><div class="fill" style="width:${v}%"></div></div>`; }
+
+    function render(res) {
+      const html = `
+        <div class="card" id="card">
+          <div class="head">
+            <span class="title">🐾 今日猫谕</span>
+            <span class="persona">值班:${res.personaName}</span>
+          </div>
+          <div class="body">
+            <div class="oracle-raw">${escapeHtml(res.raw) || "（空白也是一种神谕）"}</div>
+            ${res.modeNote ? `<div class="mode-note">${res.modeNote}</div>` : ""}
+
+            <div class="section-title">猫神解读</div>
+            <div class="reading">${escapeHtml(res.reading)}</div>
+
+            <div class="section-title">今日关键词</div>
+            <div class="kw">${res.keywords.map((k) => `<span>#${escapeHtml(k)}</span>`).join("")}</div>
+
+            <div class="grid2">
+              <div class="box"><div class="k">今日建议</div><div class="v">${escapeHtml(res.advice)}</div></div>
+              <div class="box"><div class="k">幸运物</div><div class="v">${escapeHtml(res.lucky)}</div></div>
+              <div class="box"><div class="k">今日忌</div><div class="v">${escapeHtml(res.taboo)}</div></div>
+              <div class="box"><div class="k">被猫审判指数</div><div class="v">${res.judgeScore}% · ${escapeHtml(res.judge)}</div></div>
+            </div>
+
+            <div class="section-title">人猫关系诊断</div>
+            <div class="box"><div class="v">${escapeHtml(res.relation)}</div></div>
+
+            <div class="section-title">人类误读警告</div>
+            <div class="warn">${escapeHtml(res.misread)}</div>
+
+            <div class="meters">
+              <div class="meter"><div class="lab"><span>神谕可信度</span><span>${res.trust}%</span></div><div class="bar"><div class="fill trust" style="width:${res.trust}%"></div></div></div>
+              <div class="meter"><div class="lab"><span>情绪安慰度</span><span>${res.comfort}%</span></div><div class="bar"><div class="fill comfort" style="width:${res.comfort}%"></div></div></div>
+              <div class="meter"><div class="lab"><span>胡说八道浓度</span><span>${res.nonsense}%</span></div><div class="bar"><div class="fill nonsense" style="width:${res.nonsense}%"></div></div></div>
+            </div>
+
+            <div class="sign">${escapeHtml(res.personaSign)}</div>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="ghost" id="copyBtn">📋 复制猫谕去分享</button>
+          <button class="ghost" id="againBtn">🔁 换个人格再算</button>
+        </div>`;
+      $("#cardWrap").innerHTML = html;
+      $("#cardWrap").classList.remove("hidden");
+      $("#cardWrap").scrollIntoView({ behavior: "smooth", block: "start" });
+
+      $("#copyBtn").addEventListener("click", () => copyText(res));
+      $("#againBtn").addEventListener("click", () => $("#card").scrollIntoView());
+    }
+
+    function copyText(res) {
+      const t =
+`🐾 今日猫谕(${res.personaName})
+${res.raw}
+
+【解读】${res.reading.replace(/\n\n/g, " ")}
+【关键词】${res.keywords.map((k) => "#" + k).join(" ")}
+【建议】${res.advice}
+【幸运物】${res.lucky}　【忌】${res.taboo}
+【人猫关系】${res.relation}
+【人类误读警告】${res.misread}
+神谕可信度 ${res.trust}% · 情绪安慰度 ${res.comfort}% · 胡说八道浓度 ${res.nonsense}%
+—— 喵机妙算 Meowracle Machine`;
+      navigator.clipboard?.writeText(t).then(
+        () => { const b = $("#copyBtn"); b.textContent = "✅ 已复制,去发朋友圈"; setTimeout(() => (b.textContent = "📋 复制猫谕去分享"), 1800); },
+        () => alert(t)
+      );
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+    }
+
+    $("#summon").addEventListener("click", summon);
+    $("#divine").addEventListener("click", () => {
+      let text = $("#input").value.trim();
+      if (!text) { summon(); text = $("#input").value.trim(); }
+      const res = window.MeowOracle.interpret(text, $("#persona").value, mode);
+      render(res);
+    });
+  </script>
+</body>
+</html>
